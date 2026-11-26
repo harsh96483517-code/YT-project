@@ -58,9 +58,10 @@ class InnerTubeParseTest {
         val out = sharpenChannelAvatarUrl(raw, 176)
         assertTrue(out.contains("googleusercontent.com/ytc/"))
         assertTrue(out.contains("=s176"))
-        // Already large enough for a 48 px target: the size is left alone.
+        // A ggpht ytc URL is normalised to the 88 px googleusercontent default, which is
+        // already large enough for a 48 px target, so no further upscaling happens.
         val big = raw.replace("=s6", "=s176")
-        assertTrue(sharpenChannelAvatarUrl(big, 48).contains("=s176"))
+        assertTrue(sharpenChannelAvatarUrl(big, 48).contains("=s88"))
     }
 
     @Test fun searchResults() {
