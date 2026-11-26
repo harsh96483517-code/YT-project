@@ -2171,7 +2171,7 @@ object InnerTube {
     internal fun parseViews(text: String?): Long {
         val t = text?.lowercase()?.replace(",", "")?.trim() ?: return -1
         if (t.startsWith("no ") || t.startsWith("कोई ") || t.startsWith("sin ")) return 0
-        if ("करोड़" in t || "cr" in t) {
+        if ("करोड़" in t || "crore" in t || Regex("\\bcr\\b|\\dcr\\b").containsMatchIn(t)) {
             val num = Regex("([\\d.]+)").find(t)?.groupValues?.get(1)?.toDoubleOrNull() ?: return -1
             return (num * 10_000_000).toLong()
         }

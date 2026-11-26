@@ -53,11 +53,14 @@ class InnerTubeParseTest {
 
     @Test fun sharpenYtcChannelAvatar() {
         val raw = "https://yt3.ggpht.com/ytc/AIdro_n1Ribd7LwdP_qKtqWL3ZDfIgv9M1d6g78VwpHGXVR2Ir4=s6"
+        // ytc avatars are rewritten to googleusercontent.com, which serves sizes above 96,
+        // so the 96 px cap only applies to the original ggpht host.
         val out = sharpenChannelAvatarUrl(raw, 176)
-        assertTrue(out.contains("=s96"))
-        assertTrue(!out.contains("=s176"))
-        val broken = raw.replace("=s6", "=s176")
-        assertTrue(sharpenChannelAvatarUrl(broken, 48).contains("=s96"))
+        assertTrue(out.contains("googleusercontent.com/ytc/"))
+        assertTrue(out.contains("=s176"))
+        // Already large enough for a 48 px target: the size is left alone.
+        val big = raw.replace("=s6", "=s176")
+        assertTrue(sharpenChannelAvatarUrl(big, 48).contains("=s176"))
     }
 
     @Test fun searchResults() {
