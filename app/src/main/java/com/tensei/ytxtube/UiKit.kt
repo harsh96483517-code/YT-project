@@ -120,15 +120,15 @@ fun ScreenHeader(
     ) {
         if (brandMark) {
             BrandMark()
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(10.dp))
         }
         Text(
             text = title,
             modifier = Modifier.weight(1f),
             fontFamily = RoundedHeavy,
-            fontWeight = FontWeight.Bold,
-            fontSize = 22.sp,
-            letterSpacing = (-0.5).sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = if (brandMark) 26.sp else 22.sp,
+            letterSpacing = (-1).sp,
             maxLines = 1,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
@@ -159,8 +159,8 @@ fun BackScreenHeader(
 fun BrandMark() {
     Image(
         painter = painterResource(R.drawable.ic_brand),
-        contentDescription = null,
-        modifier = Modifier.size(26.dp),
+        contentDescription = "YT",
+        modifier = Modifier.size(40.dp),
     )
 }
 

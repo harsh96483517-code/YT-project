@@ -86,7 +86,9 @@ data class UpdateInfo(
  * newer than the latest published release). Keep this in sync with the build.
  */
 internal val RELEASE_NOTES = """
-    • New app name and logo: YT.
+    • New app name and logo: YT, with a bigger professional header logo.
+    • Pause now really stops a download and Resume continues from where it stopped.
+    • Downloads page has a summary card with Pause all / Resume all.
     • Downloads fixed: files now save reliably and are also copied to Downloads/YT.
     • New icon-only bottom dock.
     • Related videos now show as full cards with a three-dot menu on the thumbnail (Download, Queue, Share).

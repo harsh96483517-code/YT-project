@@ -18,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -359,9 +361,17 @@ object Downloads {
 
     fun resume(task: DownloadTask) {
         if (task.status != DownloadStatus.Paused && task.status != DownloadStatus.Failed) return
-        deleteWork(task)
-        task.downloaded = 0L
-        task.total = -1L
+        if (task.status == DownloadStatus.Failed) {
+            // A failed download may have a broken partial file: start clean.
+            deleteWork(task)
+            task.downloaded = 0L
+            task.total = -1L
+        } else {
+            // Paused: keep what is already on disk and continue from there.
+            val partial = workFile(task, "video").let { if (it.exists()) it.length() else 0L } +
+                workFile(task, "audio").let { if (it.exists()) it.length() else 0L }
+            if (partial > 0L) task.downloaded = partial
+        }
         task.error = null
         task.status = DownloadStatus.Queued
         persist()
@@ -432,8 +442,6 @@ object Downloads {
                     if (attempt < 2) {
                         attempt++
                         StreamCache.invalidate(task.videoId)
-                        deleteWork(task)
-                        task.downloaded = 0L
                         kotlinx.coroutines.delay(1000L * attempt)
                         continue
                     }
@@ -513,14 +521,12 @@ object Downloads {
             task.total = option.estimatedBytes
             val vWork = workFile(task, "video")
             val aWork = workFile(task, "audio")
-            vWork.delete()
-            aWork.delete()
 
             val vRemote = probe(video.content)
             val aRemote = probe(audio.content)
             task.total = vRemote.total + aRemote.total
-            val vDone = AtomicLong(0)
-            val aDone = AtomicLong(0)
+            val vDone = AtomicLong(if (vWork.exists()) minOf(vWork.length(), vRemote.total) else 0L)
+            val aDone = AtomicLong(if (aWork.exists()) minOf(aWork.length(), aRemote.total) else 0L)
             coroutineScope {
                 launch {
                     val n = transfer(video.content, vWork, vRemote) { n ->
@@ -677,6 +683,7 @@ object Downloads {
                         }
 
                         while (true) {
+                            currentCoroutineContext().ensureActive()
                             val read = source.read(buffer)
                             if (read <= 0) break
                             raf.write(buffer, 0, read)

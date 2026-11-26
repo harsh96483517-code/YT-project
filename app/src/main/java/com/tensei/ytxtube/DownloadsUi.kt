@@ -234,9 +234,60 @@ fun DownloadsScreen(
     val shown = if (section == 0) videos else music
     CollapsingHeaderLayout(
         resetKey = scrollToTop to listOf(tasks.size, tasks.count { it.status == DownloadStatus.Complete }),
-        header = { ScreenHeader(title = "Downloads") { HeaderActions(onSearch, onAccount) } },
+        header = { ScreenHeader(title = "Downloads", brandMark = true) { HeaderActions(onSearch, onAccount) } },
     ) { top ->
         LazyColumn(contentPadding = contentPadding.withTop(top)) {
+            item(key = "summary") {
+                val cs = MaterialTheme.colorScheme
+                val done = tasks.filter { it.status == DownloadStatus.Complete }
+                val activeCount = tasks.count {
+                    it.status == DownloadStatus.Downloading || it.status == DownloadStatus.Queued ||
+                        it.status == DownloadStatus.Processing
+                }
+                val pausedCount = tasks.count { it.status == DownloadStatus.Paused }
+                val usedBytes = done.sumOf { runCatching { it.file.length() }.getOrDefault(0L) }
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(cs.surfaceContainerHigh)
+                        .padding(16.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "${done.size} saved · ${formatBytes(usedBytes)}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                            )
+                            Text(
+                                when {
+                                    activeCount > 0 -> "$activeCount downloading" + if (pausedCount > 0) " · $pausedCount paused" else ""
+                                    pausedCount > 0 -> "$pausedCount paused"
+                                    else -> "Everything is up to date"
+                                },
+                                color = cs.onSurfaceVariant,
+                                fontSize = 13.sp,
+                            )
+                        }
+                        if (activeCount > 0) {
+                            PillButton("Pause all", { tasks.toList().forEach { Downloads.pause(it) } })
+                        } else if (pausedCount > 0) {
+                            PillButton("Resume all", { tasks.toList().forEach { Downloads.resume(it) } })
+                        }
+                    }
+                    if (activeCount > 0) {
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { Downloads.progress },
+                            modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
+                            color = cs.primary,
+                            trackColor = cs.onSurface.copy(alpha = 0.12f),
+                        )
+                    }
+                }
+            }
             item(key = "sections") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
