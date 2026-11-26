@@ -117,7 +117,7 @@ class PoTokenGenerator {
 
 
           webPoTokenStreamingPot = webPoTokenGenerator!!.generatePoToken(webPoTokenSessionId!!)
-          Log.d(TAG, "Streaming poToken generated for sessionId=${webPoTokenSessionId?.take(20)}...")
+          Log.d(TAG, "Streaming poToken generated")
         }
 
         Triple(webPoTokenGenerator!!, webPoTokenStreamingPot!!, shouldRecreate)
@@ -135,7 +135,7 @@ class PoTokenGenerator {
         }
       }
 
-    Log.d(TAG, "poToken generated successfully: session=${streamingPot.take(20)}..., video=${playerPot.take(20)}...")
+    Log.d(TAG, "poToken generated successfully")
 
     return PoTokenResult(
       playerRequestPoToken = playerPot,

@@ -21,17 +21,38 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Optional encrypted secrets. When absent the build falls back to the keystore in the repo,
+      # so installed apps keep updating until you migrate (see README → Signing).
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Resolve version
         id: v
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
-            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "version=${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore signing key from secret
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+            echo "Using signing key from GitHub secrets"
+          elif [ -f app/release.keystore ]; then
+            echo "::warning::Using the keystore committed in the repo. Move it to GitHub secrets (see README)."
+          else
+            echo "::error::No signing key available"; exit 1
           fi
 
       - name: Set up JDK 21
@@ -48,17 +69,32 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
       - name: Build Release APK
         run: ./gradlew :app:assembleRelease -PappVersion="${{ steps.v.outputs.version }}" --stacktrace
 
-      - name: Prepare APK Artifact
-        run: cp app/build/outputs/apk/release/app-release.apk YT.apk
+      - name: Prepare APK and checksum
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk YT.apk
+          sha256sum YT.apk > YT.apk.sha256
+          cat YT.apk.sha256
+
+      - name: Validate APK signature and package
+        run: |
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs YT.apk
+          "$BT/aapt2" dump badging YT.apk | grep -E "^package:"
+          "$BT/aapt2" dump badging YT.apk | grep -q "package: name='com.tensei.ytxtube'"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: YT
-          path: YT.apk
+          path: |
+            YT.apk
+            YT.apk.sha256
 
       - name: Create GitHub Release
         if: steps.v.outputs.version != ''
@@ -66,7 +102,9 @@ jobs:
         with:
           tag_name: v${{ steps.v.outputs.version }}
           name: YT ${{ steps.v.outputs.version }}
-          files: YT.apk
+          files: |
+            YT.apk
+            YT.apk.sha256
           body: ${{ github.event.inputs.notes != '' && github.event.inputs.notes || 'Bug fixes and improvements.' }}
           draft: false
           prerelease: false

@@ -180,7 +180,9 @@ object Downloads {
         dir = targetDir.apply { runCatching { mkdirs() } }
         initialized = true
         restore()
+        cleanupOrphanedPartFiles()
         persist()
+        pump()
     }
 
     fun setCustomDownloadDir(newDir: File) {
@@ -425,6 +427,7 @@ object Downloads {
                 val job = scope.launch(start = CoroutineStart.LAZY) { execute(next) }
                 jobs[next.key] = job
                 job.start()
+                DownloadService.start()
             }
         }
     }
@@ -439,10 +442,11 @@ object Downloads {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (t: Throwable) {
+                    if (t is NoSpaceException) throw t
                     if (attempt < 2) {
                         attempt++
                         StreamCache.invalidate(task.videoId)
-                        kotlinx.coroutines.delay(1000L * attempt)
+                        kotlinx.coroutines.delay(1000L * (1L shl attempt))
                         continue
                     }
                     throw t
@@ -475,6 +479,7 @@ object Downloads {
             val work = workFile(task, "audio")
             val remote = probe(audio.content)
             task.total = remote.total
+            ensureSpace(remote.total)
             val aDone = AtomicLong(if (work.exists()) work.length() else 0L)
             val received = transfer(audio.content, work, remote) { n -> report(task, aDone.addAndGet(n)) }
             if (received != remote.total || work.length() != remote.total) {
@@ -488,6 +493,7 @@ object Downloads {
             }
             task.total = target.length()
             task.downloaded = task.total
+            validateMedia(task.file)
             task.status = DownloadStatus.Complete
             exportToPublicDownloads(task)
             return
@@ -502,6 +508,7 @@ object Downloads {
             val work = workFile(task, "video")
             val remote = probe(muxed.content)
             task.total = remote.total
+            ensureSpace(remote.total)
             val mDone = AtomicLong(if (work.exists()) work.length() else 0L)
             val received = transfer(muxed.content, work, remote) { n -> report(task, mDone.addAndGet(n)) }
             if (received != remote.total || work.length() != remote.total) {
@@ -525,6 +532,7 @@ object Downloads {
             val vRemote = probe(video.content)
             val aRemote = probe(audio.content)
             task.total = vRemote.total + aRemote.total
+            ensureSpace(task.total * 2)
             val vDone = AtomicLong(if (vWork.exists()) minOf(vWork.length(), vRemote.total) else 0L)
             val aDone = AtomicLong(if (aWork.exists()) minOf(aWork.length(), aRemote.total) else 0L)
             coroutineScope {
@@ -560,6 +568,7 @@ object Downloads {
         }
 
         task.error = null
+        validateMedia(task.file)
         task.status = DownloadStatus.Complete
         exportToPublicDownloads(task)
         persist()
@@ -881,7 +890,11 @@ object Downloads {
                     hdr = json.optBoolean("hdr", name.contains(" HDR]")),
                     downloaded = json.optLong("downloaded"),
                     total = json.optLong("total", -1L),
-                    status = if (status == DownloadStatus.Complete) status else DownloadStatus.Paused,
+                    status = when (status) {
+                        DownloadStatus.Complete, DownloadStatus.Paused, DownloadStatus.Failed -> status
+                        // Interrupted by app/process death: continue automatically.
+                        else -> DownloadStatus.Queued
+                    },
                 )
                 if (status == DownloadStatus.Complete && !task.file.exists()) continue
                 if (tasks.any { it.fileName == name }) continue
@@ -943,6 +956,45 @@ object Downloads {
     }
 
     private class HttpStatusException(val code: Int) : IOException("HTTP $code")
+
+    private class NoSpaceException : IOException("Not enough free storage for this download")
+
+    /** Fails early (without retrying) when the phone cannot hold the file. */
+    private fun ensureSpace(needed: Long) {
+        val free = runCatching { android.os.StatFs(dir.absolutePath).availableBytes }.getOrDefault(Long.MAX_VALUE)
+        if (free < needed + 64L * 1024 * 1024) throw NoSpaceException()
+    }
+
+    /** A finished file must be a playable media file with a real duration. */
+    private fun validateMedia(file: File) {
+        val retriever = android.media.MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(file.absolutePath)
+            val duration = retriever
+                .extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull() ?: 0L
+            if (duration <= 0L) throw IOException("Downloaded file is corrupted")
+        } catch (e: IOException) {
+            file.delete()
+            throw e
+        } catch (e: RuntimeException) {
+            file.delete()
+            throw IOException("Downloaded file is corrupted", e)
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+
+    /** Removes .part files that no unfinished task can resume any more. */
+    private fun cleanupOrphanedPartFiles() {
+        runCatching {
+            val keep = tasks.filter { it.status != DownloadStatus.Complete }
+                .map { "${it.videoId}_${it.height}_" }
+            dir.listFiles()?.forEach { f ->
+                if (f.isFile && f.name.endsWith(".part") && keep.none { f.name.startsWith(it) }) f.delete()
+            }
+        }
+    }
 }
 
 

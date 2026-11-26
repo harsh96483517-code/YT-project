@@ -79,6 +79,7 @@ data class UpdateInfo(
     val notes: String,
     val apkUrl: String,
     val sizeBytes: Long,
+    val sha256Url: String? = null,
 )
 
 /**
@@ -228,12 +229,20 @@ class UpdateState(private val scope: CoroutineScope) {
                 if (name.equals("YT.apk", ignoreCase = true)) break
             }
             val url = apkUrl ?: return null
+            var shaUrl: String? = null
+            for (i in 0 until assets.length()) {
+                val asset = assets.optJSONObject(i) ?: continue
+                if (asset.optString("name").endsWith(".sha256", ignoreCase = true)) {
+                    shaUrl = asset.optString("browser_download_url").ifBlank { null }
+                }
+            }
             return UpdateInfo(
                 version = version,
                 tag = tag,
                 notes = json.optString("body").orEmpty(),
                 apkUrl = url,
                 sizeBytes = size,
+                sha256Url = shaUrl,
             )
         }
     }
@@ -276,7 +285,65 @@ class UpdateState(private val scope: CoroutineScope) {
             }
         }
         if (target.length() <= 0L) error("Empty download")
+        // Never hand an unverified file to the installer.
+        verifyChecksum(target, update.sha256Url)
+        verifyApkIdentity(context, target)
         return target
+    }
+
+    /** Compares the APK with the SHA-256 published next to it in the release (when present). */
+    private fun verifyChecksum(file: File, sha256Url: String?) {
+        if (sha256Url == null) return
+        val request = Request.Builder().url(sha256Url).header("User-Agent", "YT/${BuildConfig.VERSION_NAME}").build()
+        val expected = Net.client.newCall(request).execute().use { r ->
+            if (!r.isSuccessful) error("Checksum unavailable")
+            r.body?.string().orEmpty().trim().substringBefore(' ').substringBefore('\n').lowercase()
+        }
+        if (expected.length != 64) error("Invalid checksum file")
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            var n: Int
+            while (input.read(buf).also { n = it } > 0) digest.update(buf, 0, n)
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        if (actual != expected) {
+            file.delete()
+            error("Update failed the integrity check")
+        }
+    }
+
+    /** The downloaded APK must be this same app, signed by the same key as the installed one. */
+    private fun verifyApkIdentity(context: Context, apk: File) {
+        val pm = context.packageManager
+        val flags = if (Build.VERSION.SDK_INT >= 28) {
+            android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION") android.content.pm.PackageManager.GET_SIGNATURES
+        }
+        fun certs(info: android.content.pm.PackageInfo): Set<String> {
+            val raw: Array<android.content.pm.Signature>? = if (Build.VERSION.SDK_INT >= 28) {
+                info.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                info.signatures
+            }
+            val sigs = raw ?: return emptySet()
+            return sigs.map { s ->
+                java.security.MessageDigest.getInstance("SHA-256").digest(s.toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+            }.toSet()
+        }
+        val archive = pm.getPackageArchiveInfo(apk.absolutePath, flags) ?: run {
+            apk.delete(); error("The downloaded file is not a valid APK")
+        }
+        if (archive.packageName != context.packageName) {
+            apk.delete(); error("The update is for a different app")
+        }
+        val installed = pm.getPackageInfo(context.packageName, flags)
+        if (certs(archive).intersect(certs(installed)).isEmpty()) {
+            apk.delete(); error("The update is signed with a different key")
+        }
     }
 }
 

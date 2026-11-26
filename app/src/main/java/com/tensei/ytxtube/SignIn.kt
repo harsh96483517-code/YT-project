@@ -174,6 +174,9 @@ fun SignInScreen(onDone: () -> Unit, onCancel: () -> Unit) {
                         cookies.setAcceptCookie(true)
                         cookies.setAcceptThirdPartyCookies(this, true)
                         settings.javaScriptEnabled = true
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                         settings.domStorageEnabled = true
                         settings.userAgentString = WebSettings.getDefaultUserAgent(context).replace("; wv", "")
 
@@ -207,6 +210,12 @@ fun SignInScreen(onDone: () -> Unit, onCancel: () -> Unit) {
                         }
 
                         webViewClient = object : WebViewClient() {
+                            // Only HTTPS pages may load in the sign-in WebView (blocks intent:, file:, javascript: redirects).
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView,
+                                request: android.webkit.WebResourceRequest,
+                            ): Boolean = !request.url.scheme.equals("https", ignoreCase = true)
+
                             override fun onPageFinished(view: WebView, url: String) {
                                 checkSignIn(view, url)
                             }

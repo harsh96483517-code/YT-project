@@ -34,3 +34,12 @@
     public static *** d(...);
     public static *** i(...);
 }
+
+
+# Phase 1 security: remove debug/verbose/info logging from release builds so nothing
+# sensitive can leak through logcat.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}

@@ -145,17 +145,17 @@ private constructor(
 
   @JavascriptInterface
   fun onRunBotguardResult(botguardResponse: String) {
-    Log.d(TAG, "botguardResponse: $botguardResponse")
+    Log.d(TAG, "botguard response received (${botguardResponse.length} chars)")
     makeBotguardServiceRequest(
       "https://www.youtube.com/api/jnn/v1/GenerateIT",
       "[ \"$REQUEST_KEY\", \"$botguardResponse\" ]",
     ) { responseBody ->
-      Log.d(TAG, "GenerateIT response: $responseBody")
+      Log.d(TAG, "GenerateIT response received (${responseBody.length} chars)")
       try {
         val (integrityToken, expirationTimeInSeconds) = parseIntegrityTokenData(responseBody)
         Log.d(
           TAG,
-          "Parsed integrityToken (${integrityToken.take(50)}...), expires in $expirationTimeInSeconds sec"
+          "Parsed integrity token, expires in $expirationTimeInSeconds sec"
         )
 
 
@@ -242,7 +242,7 @@ private constructor(
 
   @JavascriptInterface
   fun onObtainPoTokenResult(identifier: String, poTokenU8: String) {
-    Log.d(TAG, "Generated poToken (before decoding): identifier=$identifier poTokenU8=$poTokenU8")
+    Log.d(TAG, "poToken received for a request")
     val poToken =
       try {
         u8ToBase64(poTokenU8)
@@ -251,7 +251,7 @@ private constructor(
         return
       }
 
-    Log.d(TAG, "Generated poToken: identifier=$identifier poToken=$poToken")
+    Log.d(TAG, "poToken decoded")
     popPoTokenContinuation(identifier)?.resume(poToken)
   }
 

@@ -32,9 +32,9 @@ android {
             val keystoreFile = file("release.keystore")
             if (keystoreFile.exists()) {
                 storeFile = keystoreFile
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "android"
-                keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+                storePassword = System.getenv("KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
+                keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "androiddebugkey"
+                keyPassword = System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "android"
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
