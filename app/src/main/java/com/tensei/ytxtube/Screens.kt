@@ -555,6 +555,7 @@ fun AllSubscriptionsScreen(
                 items(channels, key = { it.id }) { ch ->
                     Row(
                         Modifier
+                            .animateItem()
                             .fillMaxWidth()
                             .pressable(onClick = { openChannel(ch.url) })
                             .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -628,7 +629,7 @@ fun LibraryScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        items(history.take(20), key = { "h-" + it.id }) { video -> HistoryCard(video) { onOpen(video) } }
+                        items(history.take(20), key = { "h-" + it.id }) { video -> HistoryCard(video, Modifier.animateItem()) { onOpen(video) } }
                     }
                     lib.history.loading -> Box(Modifier.fillMaxWidth().padding(24.dp), Alignment.Center) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 4.dp, modifier = Modifier.size(28.dp))
@@ -697,7 +698,7 @@ fun LibraryScreen(
                 PlaylistRef("LL", "Liked videos", null, null),
             )
             items((pinned + lib.playlists).chunked(2), key = { row -> row.joinToString { it.id } }) { row ->
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.animateItem().padding(horizontal = 16.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     row.forEach { pl -> PlaylistTile(pl, Modifier.weight(1f)) { onOpenPlaylist(pl) } }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
@@ -708,9 +709,9 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun HistoryCard(video: VideoItem, onClick: () -> Unit) {
+private fun HistoryCard(video: VideoItem, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val menu = LocalVideoMenu.current
-    Column(Modifier.width(168.dp).prefetchOnPress(video.id).pressable(pressedScale = 0.97f, onLongClick = { menu(video) }, onClick = onClick)) {
+    Column(modifier.width(168.dp).prefetchOnPress(video.id).pressable(pressedScale = 0.97f, onLongClick = { menu(video) }, onClick = onClick)) {
         Box {
             Thumbnail(video.thumbnail, Modifier.fillMaxWidth().aspectRatio(16f / 9f), radius = 12)
             DurationPill(video.durationSec, Modifier.align(Alignment.BottomEnd).padding(6.dp), small = true)
@@ -1007,6 +1008,7 @@ fun SearchScreen(
                         items(matchingHistory, key = { "hist-$it" }) { query ->
                             Row(
                                 modifier = Modifier
+                                    .animateItem()
                                     .fillMaxWidth()
                                     .pressable {
                                         state.updateQuery(query)
@@ -1043,6 +1045,7 @@ fun SearchScreen(
                         items(nonHistorySuggestions, key = { "sug-$it" }) { suggestion ->
                             Row(
                                 modifier = Modifier
+                                    .animateItem()
                                     .fillMaxWidth()
                                     .pressable {
                                         state.updateQuery(suggestion)
@@ -1070,9 +1073,10 @@ fun SearchScreen(
                     }
                 }
             }
-            state.loading && state.results.isEmpty() -> Box(Modifier.fillMaxWidth().padding(top = 48.dp), Alignment.Center) {
-                CircularProgressIndicator(color = c.primary, strokeWidth = 4.dp, modifier = Modifier.size(36.dp))
-            }
+            state.loading && state.results.isEmpty() ->
+                LazyColumn(contentPadding = contentPadding.withTop(top), userScrollEnabled = false) {
+                    items(3) { VideoCardSkeleton() }
+                }
             state.error != null -> EmptyState(
                 icon = Icons.Rounded.CloudOff,
                 title = "Search didn't load",
@@ -1115,6 +1119,7 @@ fun SearchScreen(
                         items(history, key = { "hist-$it" }) { query ->
                             Row(
                                 modifier = Modifier
+                                    .animateItem()
                                     .fillMaxWidth()
                                     .pressable {
                                         state.updateQuery(query)
@@ -1167,7 +1172,7 @@ fun SearchScreen(
                 LaunchedEffect(state.generation) { list.scrollToItem(0) }
                 LazyColumn(state = list, contentPadding = contentPadding.withTop(top)) {
                 items(state.results, key = { it.id }) { video ->
-                    VideoCard(video, onClick = {
+                    VideoCard(video, modifier = Modifier.animateItem(), onClick = {
                         val currentQuery = state.submitted.trim().ifEmpty { state.query.trim() }
                         if (currentQuery.isNotEmpty()) {
                             SearchHistory.add(currentQuery)

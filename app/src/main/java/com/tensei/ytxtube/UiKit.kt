@@ -667,3 +667,37 @@ fun CommunityCard(post: CommunityPost, modifier: Modifier = Modifier) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.outlineVariant.copy(alpha = 0.3f)))
     }
 }
+
+
+/**
+ * Placeholder shaped like a [VideoCard] while the first page of a feed loads. It pulses softly
+ * (static when the system has animations off) and is only composed while there is nothing to show.
+ */
+@Composable
+fun VideoCardSkeleton(modifier: Modifier = Modifier) {
+    val c = MaterialTheme.colorScheme
+    val reduced = rememberReducedMotion()
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton")
+    val pulse = transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.7f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "skeletonPulse",
+    ).value
+    val block = c.onSurface.copy(alpha = (if (reduced) 0.5f else pulse) * 0.18f)
+    Column(modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(block))
+        Row(Modifier.fillMaxWidth().padding(12.dp)) {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(block))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Box(Modifier.fillMaxWidth(0.85f).height(14.dp).clip(RoundedCornerShape(7.dp)).background(block))
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.fillMaxWidth(0.55f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(block))
+            }
+        }
+    }
+}

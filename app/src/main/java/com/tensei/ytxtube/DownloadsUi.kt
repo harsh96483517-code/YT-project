@@ -1,6 +1,7 @@
 package com.tensei.ytxtube
 
 import android.widget.Toast
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -252,8 +255,14 @@ fun DownloadsScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(cs.surfaceContainerHigh)
+                        .animateContentSize(androidx.compose.animation.core.tween(Motion.RowResizeMs, easing = Motion.Emphasized))
                         .padding(16.dp),
                 ) {
+                    val smoothTotal by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = Downloads.progress.coerceIn(0f, 1f),
+                        animationSpec = androidx.compose.animation.core.tween(Motion.ProgressMs, easing = androidx.compose.animation.core.LinearEasing),
+                        label = "summaryProgress",
+                    )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -280,7 +289,7 @@ fun DownloadsScreen(
                     if (activeCount > 0) {
                         Spacer(Modifier.height(12.dp))
                         androidx.compose.material3.LinearProgressIndicator(
-                            progress = { Downloads.progress },
+                            progress = { smoothTotal },
                             modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
                             color = cs.primary,
                             trackColor = cs.onSurface.copy(alpha = 0.12f),
@@ -323,7 +332,7 @@ fun DownloadsScreen(
                 if (active.isNotEmpty()) {
                     item(key = "activeTitle") { SectionTitle("Downloading") }
                     items(active, key = { "a-" + it.key }) { task ->
-                        DownloadRow(task, onOpen = null)
+                        DownloadRow(task, onOpen = null, modifier = Modifier.animateItem())
                     }
                 }
                 if (finished.isNotEmpty()) {
@@ -331,6 +340,7 @@ fun DownloadsScreen(
                     items(finished, key = { "d-" + it.key }) { task ->
                         DownloadRow(
                             task,
+                            modifier = Modifier.animateItem(),
                             onOpen = {
                                 if (section == 0) onOpen(task.toVideoItem())
                                 else onOpenMusic(task.toVideoItem())
@@ -374,15 +384,27 @@ private fun DownloadSectionPill(label: String, count: Int, selected: Boolean, on
 }
 
 @Composable
-private fun DownloadRow(task: DownloadTask, onOpen: (() -> Unit)?) {
+private fun DownloadRow(task: DownloadTask, onOpen: (() -> Unit)?, modifier: Modifier = Modifier) {
     val c = MaterialTheme.colorScheme
     var menu by remember(task.key) { mutableStateOf(false) }
     val running = task.status == DownloadStatus.Downloading || task.status == DownloadStatus.Queued ||
         task.status == DownloadStatus.Processing
 
+    val reduced = rememberReducedMotion()
+    val smoothProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = task.progress.coerceIn(0f, 1f),
+        animationSpec = if (reduced) androidx.compose.animation.core.snap()
+        else androidx.compose.animation.core.tween(Motion.ProgressMs, easing = androidx.compose.animation.core.LinearEasing),
+        label = "downloadProgress",
+    )
+
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
+            .then(
+                if (reduced) Modifier
+                else Modifier.animateContentSize(androidx.compose.animation.core.tween(Motion.RowResizeMs, easing = Motion.Emphasized)),
+            )
             .pressable(enabled = onOpen != null, pressedScale = 0.985f) { onOpen?.invoke() }
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
@@ -419,14 +441,48 @@ private fun DownloadRow(task: DownloadTask, onOpen: (() -> Unit)?) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    statusText(task),
-                    color = if (task.status == DownloadStatus.Failed) c.error else c.onSurfaceVariant,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                androidx.compose.animation.Crossfade(
+                    targetState = task.status,
+                    animationSpec = if (reduced) androidx.compose.animation.core.snap()
+                    else androidx.compose.animation.core.tween(Motion.RowResizeMs),
+                    label = "downloadStatus",
+                ) { st ->
+                    Text(
+                        statusText(task),
+                        color = if (st == DownloadStatus.Failed) c.error else c.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (task.status != DownloadStatus.Complete) {
+                // One-tap Pause / Resume (previously only reachable through the ⋮ menu).
+                Box(
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { if (running) Downloads.pause(task) else Downloads.resume(task) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.animation.Crossfade(
+                        targetState = running,
+                        animationSpec = if (reduced) androidx.compose.animation.core.snap()
+                        else androidx.compose.animation.core.tween(150),
+                        label = "pauseResumeIcon",
+                    ) { isRunning ->
+                        Icon(
+                            if (isRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            if (isRunning) "Pause download" else "Resume download",
+                            tint = c.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
             }
             Box {
                 Box(
@@ -467,7 +523,7 @@ private fun DownloadRow(task: DownloadTask, onOpen: (() -> Unit)?) {
         if (running || task.status == DownloadStatus.Paused || task.status == DownloadStatus.Failed) {
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { task.progress },
+                progress = { smoothProgress },
                 modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
                 color = if (task.status == DownloadStatus.Failed) c.error else c.primary,
                 trackColor = c.onSurfaceVariant.copy(alpha = 0.18f),

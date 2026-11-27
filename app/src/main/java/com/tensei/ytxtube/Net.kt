@@ -23,10 +23,35 @@ object Net {
             .dispatcher(dispatcher)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .connectionPool(okhttp3.ConnectionPool(32, 5, TimeUnit.MINUTES))
             .build()
     }
 
+
+    /**
+     * Client for short metadata/API calls. It shares connections and the dispatcher with [client]
+     * but gives up after 60 s in total, so a stuck request can never hang the UI forever. Long
+     * transfers (downloads, media) must keep using [client], which has no overall deadline.
+     */
+    val apiClient: OkHttpClient by lazy { client.newBuilder().callTimeout(60, TimeUnit.SECONDS).build() }
+
+    /**
+     * After Wi-Fi <-> mobile switches, pooled connections still point at the old network and make
+     * the next calls fail. Dropping idle connections on every network change fixes that.
+     */
+    fun watchNetworkChanges(context: android.content.Context) {
+        runCatching {
+            val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return
+            var last: android.net.Network? = null
+            cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    if (last != null && last != network) client.connectionPool.evictAll()
+                    last = network
+                }
+            })
+        }
+    }
 
     @Volatile private var mediaHost: String? = null
 
@@ -122,21 +147,38 @@ class NewPipeDownloader private constructor(private val client: OkHttpClient) : 
                 builder.addHeader("Authorization", auth)
             }
         }
-        client.newCall(builder.build()).execute().use { response ->
-
-            if (response.code == 429) throw ReCaptchaException("reCaptcha challenge requested", request.url())
-            val text = response.body?.string()
-            return Response(
-                response.code,
-                response.message,
-                response.headers.toMultimap(),
-                if (PlayerFallback.handles(request.url())) PlayerFallback.substitute(request.url(), request.dataToSend(), text) else text,
-                response.request.url.toString(),
-            )
+        val okRequest = builder.build()
+        var attempt = 0
+        while (true) {
+            try {
+                val response = client.newCall(okRequest).execute()
+                if (RetryPolicy.isRetryableStatus(response.code) && attempt < RetryPolicy.MAX_RETRIES) {
+                    val wait = RetryPolicy.delayMs(attempt, response.header("Retry-After"))
+                    response.close()
+                    attempt++
+                    Thread.sleep(wait)
+                    continue
+                }
+                response.use {
+                    if (it.code == 429) throw ReCaptchaException("reCaptcha challenge requested", request.url())
+                    val text = it.body?.string()
+                    return Response(
+                        it.code,
+                        it.message,
+                        it.headers.toMultimap(),
+                        if (PlayerFallback.handles(request.url())) PlayerFallback.substitute(request.url(), request.dataToSend(), text) else text,
+                        it.request.url.toString(),
+                    )
+                }
+            } catch (e: java.io.IOException) {
+                if (attempt >= RetryPolicy.MAX_RETRIES || !RetryPolicy.isRetryableError(e) || Thread.currentThread().isInterrupted) throw e
+                Thread.sleep(RetryPolicy.delayMs(attempt, null))
+                attempt++
+            }
         }
     }
 
     companion object {
-        val instance: NewPipeDownloader by lazy { NewPipeDownloader(Net.client) }
+        val instance: NewPipeDownloader by lazy { NewPipeDownloader(Net.apiClient) }
     }
 }

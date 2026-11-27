@@ -45,6 +45,12 @@ object Motion {
     const val ScrubChromeMs = 220
 
     const val HoldSpeedMs = 580L
+
+    /** Progress bars glide between updates instead of jumping (download progress arrives in steps). */
+    const val ProgressMs = 400
+
+    /** Height changes inside a list row (progress bar appearing, errors showing). */
+    const val RowResizeMs = 260
 }
 
 

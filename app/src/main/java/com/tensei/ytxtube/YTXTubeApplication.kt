@@ -19,6 +19,7 @@ class YTXTubeApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         appContext = applicationContext
+        Net.watchNetworkChanges(this)
         TvMode.init(this)
         LanguageSettings.init(this)
         GlassQuality.init(this)

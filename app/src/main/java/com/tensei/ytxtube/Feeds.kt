@@ -256,6 +256,8 @@ fun FeedList(
                     action = { PillButton("Try again", { feed.refresh() }) },
                 )
             }
+            // First load: show card-shaped placeholders instead of a lone spinner.
+            feed.loading && listVideos.isEmpty() -> items(3) { VideoCardSkeleton() }
             feed.loading || feed.hasMore -> item {
                 Box(Modifier.fillMaxWidth().padding(28.dp), Alignment.Center) {
                     CircularProgressIndicator(color = c.primary, strokeWidth = 4.dp, modifier = Modifier.size(32.dp))
