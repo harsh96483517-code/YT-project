@@ -222,6 +222,28 @@ fun SettingsScreen(
                     )
                 }
 
+                SettingsSectionHeader("Downloader (yt-dlp)")
+                SettingsCard {
+                    SettingsSwitchRow(
+                        title = "Use yt-dlp for downloads",
+                        subtitle = "Gets YouTube fixes quickly. If it fails, the built-in downloader is used.",
+                        checked = YtDlpEngine.enabled,
+                        onCheckedChange = { YtDlpEngine.setEnabled(it) },
+                    )
+                    SettingsSwitchRow(
+                        title = "Nightly yt-dlp builds",
+                        subtitle = "Newest fixes first, may be slightly less stable",
+                        checked = YtDlpEngine.nightly,
+                        onCheckedChange = { YtDlpEngine.setNightly(it) },
+                    )
+                    SettingsRow(
+                        icon = Icons.Rounded.Download,
+                        title = "Update yt-dlp",
+                        subtitle = YtDlpEngine.statusLine(),
+                        onClick = { YtDlpEngine.update(context) },
+                    )
+                }
+
                 SettingsSectionHeader(I18n.t("about", "About"))
                 SettingsCard {
                     SettingsRow(

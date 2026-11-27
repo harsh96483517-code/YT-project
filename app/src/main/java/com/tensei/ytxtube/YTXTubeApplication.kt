@@ -20,6 +20,7 @@ class YTXTubeApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         appContext = applicationContext
         Net.watchNetworkChanges(this)
+        YtDlpEngine.init(this)
         TvMode.init(this)
         LanguageSettings.init(this)
         GlassQuality.init(this)

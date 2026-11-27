@@ -79,9 +79,14 @@ class DownloadTask(
     var error by mutableStateOf<String?>(null)
         internal set
 
+    /** 0..100 while yt-dlp is downloading (it reports percent, not bytes); -1 when not used. */
+    var ytPercent by mutableStateOf(-1f)
+        internal set
+
     val progress: Float
         get() = when {
             status == DownloadStatus.Complete || status == DownloadStatus.Processing -> 1f
+            ytPercent >= 0f -> (ytPercent / 100f).coerceIn(0f, 1f)
             total > 0L -> (downloaded.toFloat() / total).coerceIn(0f, 1f)
             else -> 0f
         }
@@ -468,8 +473,39 @@ object Downloads {
         }
     }
 
+    /** yt-dlp path: one process downloads, merges and writes the final file. */
+    private suspend fun runWithYtDlp(task: DownloadTask) {
+        var stage = 0
+        var last = 0f
+        val stages = if (task.height == 0) 1 else 2 // video + audio are fetched one after the other
+        YtDlpEngine.download(task) { p ->
+            if (p + 30f < last) stage++ // percent dropped: the next stream started
+            last = p
+            task.ytPercent = ((stage.coerceAtMost(stages - 1) * 100f + p) / stages).coerceIn(0f, 100f)
+        }
+        validateMedia(task.file)
+        task.total = task.file.length()
+        task.downloaded = task.total
+        task.ytPercent = -1f
+        task.error = null
+        task.status = DownloadStatus.Complete
+        exportToPublicDownloads(task)
+        persist()
+    }
+
     private suspend fun runDownload(task: DownloadTask) {
         task.status = DownloadStatus.Downloading
+        if (YtDlpEngine.enabled && YtDlpEngine.ready) {
+            try {
+                runWithYtDlp(task)
+                return
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.w(TAG, "yt-dlp failed, using the built-in downloader", t)
+                task.ytPercent = -1f
+            }
+        }
         StreamCache.invalidate(task.videoId)
         val info = StreamCache.getOrLoad(task.videoId)
         HdrFormats.install(task.videoId, info)
@@ -988,8 +1024,9 @@ object Downloads {
     /** Removes .part files that no unfinished task can resume any more. */
     private fun cleanupOrphanedPartFiles() {
         runCatching {
-            val keep = tasks.filter { it.status != DownloadStatus.Complete }
-                .map { "${it.videoId}_${it.height}_" }
+            val unfinished = tasks.filter { it.status != DownloadStatus.Complete }
+            val keep = unfinished.map { "${it.videoId}_${it.height}_" } +
+                unfinished.map { File(it.fileName).nameWithoutExtension } // yt-dlp partial files
             dir.listFiles()?.forEach { f ->
                 if (f.isFile && f.name.endsWith(".part") && keep.none { f.name.startsWith(it) }) f.delete()
             }

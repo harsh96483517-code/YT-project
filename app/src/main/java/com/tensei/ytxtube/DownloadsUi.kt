@@ -561,11 +561,13 @@ private fun statusText(task: DownloadTask): String = when (task.status) {
     DownloadStatus.Downloading -> "Downloading ${(task.progress * 100).toInt()}%"
     DownloadStatus.Processing -> "Combining video and audio…"
     DownloadStatus.Queued -> "Waiting to download"
-    DownloadStatus.Paused -> "Paused · ${formatBytes(task.downloaded)} downloaded"
+    DownloadStatus.Paused ->
+        if (task.ytPercent >= 0f) "Paused · ${task.ytPercent.toInt()}%" else "Paused · ${formatBytes(task.downloaded)} downloaded"
     DownloadStatus.Failed -> task.error ?: "Download failed"
 }
 
 private fun progressText(task: DownloadTask): String {
+    if (task.ytPercent >= 0f) return "${task.ytPercent.toInt()}%"
     val total = task.total
     return if (total > 0) {
         "${formatBytes(task.downloaded)} of ${formatBytes(total)}"

@@ -43,3 +43,13 @@
     public static int d(...);
     public static int i(...);
 }
+
+# yt-dlp (youtubedl-android) and its dependencies
+-keep class com.yausername.** { *; }
+-keep class com.fasterxml.jackson.** { *; }
+-keep class org.apache.commons.compress.** { *; }
+-keep class org.apache.commons.io.** { *; }
+-dontwarn com.fasterxml.jackson.**
+-dontwarn org.apache.commons.compress.**
+-dontwarn org.apache.commons.io.**
+-dontwarn java.lang.management.**

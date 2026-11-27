@@ -23,6 +23,8 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = appVersionCode
+        // yt-dlp ships Python/ffmpeg per CPU; keep the APK to the two ABIs real phones use.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         versionName = appVersionName
         buildConfigField("String", "GITHUB_REPO", "\"$githubRepo\"")
     }
@@ -147,6 +149,9 @@ dependencies {
     implementation("androidx.media3:media3-ui-compose:$media3")
 
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
+    // yt-dlp (Python + ffmpeg bundled) for downloads; the yt-dlp binary itself can self-update in the app.
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.guava:guava:33.3.1-android")

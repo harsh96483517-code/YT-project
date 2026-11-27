@@ -87,6 +87,7 @@ data class UpdateInfo(
  * newer than the latest published release). Keep this in sync with the build.
  */
 internal val RELEASE_NOTES = """
+    • Downloads now use yt-dlp (updates itself, falls back to the built-in downloader).
     • Downloads keep running in the background, so leaving the app no longer stops a transfer.
     • Every account keeps its own watch progress, search history and recently played music.
     • Expired sessions are detected and the sign-in screen offers a one-tap "Sign in again".
