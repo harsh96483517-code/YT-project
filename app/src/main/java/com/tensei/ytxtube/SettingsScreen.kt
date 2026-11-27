@@ -228,13 +228,13 @@ fun SettingsScreen(
                         title = "Use yt-dlp for downloads",
                         subtitle = "Gets YouTube fixes quickly. If it fails, the built-in downloader is used.",
                         checked = YtDlpEngine.enabled,
-                        onCheckedChange = { YtDlpEngine.setEnabled(it) },
+                        onCheckedChange = { YtDlpEngine.applyEnabled(it) },
                     )
                     SettingsSwitchRow(
                         title = "Nightly yt-dlp builds",
                         subtitle = "Newest fixes first, may be slightly less stable",
                         checked = YtDlpEngine.nightly,
-                        onCheckedChange = { YtDlpEngine.setNightly(it) },
+                        onCheckedChange = { YtDlpEngine.applyNightly(it) },
                     )
                     SettingsRow(
                         icon = Icons.Rounded.Download,

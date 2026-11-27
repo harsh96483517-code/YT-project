@@ -64,13 +64,14 @@ object YtDlpEngine {
         }
     }
 
-    fun setEnabled(value: Boolean) {
+    /** Renamed from setEnabled: the `enabled` property already generates that JVM setter. */
+    fun applyEnabled(value: Boolean) {
         enabled = value
         YTXTubeApplication.appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_ENABLED, value).apply()
     }
 
-    fun setNightly(value: Boolean) {
+    fun applyNightly(value: Boolean) {
         nightly = value
         YTXTubeApplication.appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_NIGHTLY, value).putLong(KEY_LAST_UPDATE, 0L).apply()
