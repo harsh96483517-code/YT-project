@@ -1,5 +1,6 @@
 package com.tensei.ytxtube
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
