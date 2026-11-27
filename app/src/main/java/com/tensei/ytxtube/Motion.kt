@@ -40,6 +40,9 @@ object Motion {
 
     const val CollapseMs = 380
 
+    /** Player sliding up from the mini bar: decelerates into place, no bounce (like YouTube). */
+    const val ExpandMs = 340
+
     const val ControlsHideMs = 2_000L
 
     const val ScrubChromeMs = 220

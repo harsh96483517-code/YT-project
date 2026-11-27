@@ -114,10 +114,7 @@ class PlayerMorph(
             reducedMotion -> progress.snapTo(target)
 
 
-            expanded -> progress.animateTo(
-                target,
-                spring(dampingRatio = 0.9f, stiffness = 420f, visibilityThreshold = 0.0005f),
-            )
+            expanded -> progress.animateTo(target, tween(Motion.ExpandMs, easing = Motion.Emphasized))
             else -> progress.animateTo(target, tween(Motion.CollapseMs, easing = Motion.Emphasized))
         }
     }
@@ -153,7 +150,8 @@ class PlayerMorph(
         const val FLING_PX_PER_S = 2200f
         const val DISMISS_FROM_FULL = 0.32f
         const val EXPAND_FROM_MINI = 0.32f
-        private val settleSpec = spring(dampingRatio = 0.86f, stiffness = 550f, visibilityThreshold = 0.0005f)
+        // Critically damped: follows the finger's fling and stops without wobbling.
+        private val settleSpec = spring(dampingRatio = 1f, stiffness = 500f, visibilityThreshold = 0.0005f)
         private val closeSpec = spring(dampingRatio = 1f, stiffness = 550f, visibilityThreshold = 0.0005f)
     }
 }
