@@ -22,8 +22,14 @@ object ResumeStore {
 
     val positions = mutableStateMapOf<String, Pair<Long, Long>>()
 
-    fun init(context: Context) {
-        val p = context.getSharedPreferences("resume", Context.MODE_PRIVATE).also { prefs = it }
+    fun init(context: Context) = open(context)
+
+    /** Called when the active account changes: show only that account's watch progress. */
+    fun reload() = open(YTXTubeApplication.appContext)
+
+    private fun open(context: Context) {
+        val p = context.getSharedPreferences(Account.scopedName("resume"), Context.MODE_PRIVATE).also { prefs = it }
+        positions.clear()
         p.all.forEach { (id, value) ->
             val parts = (value as? String)?.split(',') ?: return@forEach
             val pos = parts.getOrNull(0)?.toLongOrNull() ?: return@forEach

@@ -159,6 +159,8 @@ class PlaybackService : MediaSessionService() {
             release()
         }
         session = null
+        // After the player is released no more events can arrive, so the worker can stop now.
+        watchTime?.shutdown()
         resolver.shutdown()
         super.onDestroy()
     }
@@ -233,7 +235,47 @@ private class StreamRecoverer(
     private var lastId: String? = null
     private var lastPositionMs = 0L
 
+    private var networkRetries = 0
+    private val retryPrepare = Runnable {
+        // Only retry if the player is still stuck in the error state.
+        if (player.playerError != null) player.prepare()
+    }
+
+    override fun onPlaybackStateChanged(playbackState: Int) {
+        if (playbackState == Player.STATE_READY) {
+            networkRetries = 0
+            main.removeCallbacks(retryPrepare)
+        }
+    }
+
+    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+        networkRetries = 0
+        main.removeCallbacks(retryPrepare)
+    }
+
+    /** Dropped connection: try again with growing delays (2s, 4s, 8s, 16s, 32s), resuming in place. */
+    private fun retryAfterNetworkError() {
+        if (player.currentMediaItem?.localConfiguration?.uri?.scheme == "file") return
+        if (networkRetries >= MAX_NETWORK_RETRIES) return
+        val delayMs = 2_000L shl networkRetries
+        networkRetries++
+        main.removeCallbacks(retryPrepare)
+        main.postDelayed(retryPrepare, delayMs)
+    }
+
     override fun onPlayerError(error: PlaybackException) {
+        when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> {
+                retryAfterNetworkError()
+                return
+            }
+            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> {
+                player.seekToDefaultPosition()
+                player.prepare()
+                return
+            }
+        }
         if (error.errorCode != PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS) return
         val item = player.currentMediaItem ?: return
 
@@ -280,6 +322,7 @@ private class StreamRecoverer(
 
     private companion object {
         const val PROGRESS_MS = 30_000L
+        const val MAX_NETWORK_RETRIES = 5
     }
 }
 
@@ -339,6 +382,11 @@ private class WatchTimeReporter(private val player: ExoPlayer) : Player.Listener
         if (oldPosition.mediaItemIndex == newPosition.mediaItemIndex && player.isPlaying) stretchFrom = newPosition.positionMs
     }
 
+
+    /** Stops the reporter's worker thread (queued pings still run first). Call once, on destroy. */
+    fun shutdown() {
+        io.shutdown()
+    }
 
     fun finish() {
         main.removeCallbacks(tick)

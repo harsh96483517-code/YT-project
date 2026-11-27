@@ -15,8 +15,17 @@ object RecentMusic {
     private const val KEY = "tracks"
     private const val MAX = 30
 
-    private val prefs by lazy {
-        YTXTubeApplication.appContext.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+    private var prefsCache: android.content.SharedPreferences? = null
+    private val prefs: android.content.SharedPreferences
+        get() = prefsCache ?: YTXTubeApplication.appContext
+            .getSharedPreferences(Account.scopedName(PREFS), android.content.Context.MODE_PRIVATE)
+            .also { prefsCache = it }
+
+    /** Called when the active account changes: show only that account's recent tracks. */
+    fun reload() {
+        prefsCache = null
+        loaded = false
+        items = emptyList()
     }
 
     var items by mutableStateOf<List<VideoItem>>(emptyList())

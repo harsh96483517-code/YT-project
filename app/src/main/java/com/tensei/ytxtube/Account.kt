@@ -129,6 +129,38 @@ object Account {
     var activeAccountId by mutableStateOf<String?>(null)
         private set
 
+    /** True after YouTube rejected the active session (cookies expired or revoked). */
+    var sessionExpired by mutableStateOf(false)
+        private set
+
+    fun markSessionRejected() {
+        if (signedIn) sessionExpired = true
+    }
+
+    /**
+     * Name of the local storage file for per-account data (watch progress, search history, recent
+     * music). Every account gets its own file, signed-out use has the plain name, so personal data
+     * is never shown to a different account.
+     */
+    fun scopedName(base: String): String = activeAccountId?.let { "${base}_$it" } ?: base
+
+    /** Re-opens all per-account local stores for the account that is now active. */
+    private fun reloadScopedStores() {
+        sessionExpired = false
+        runCatching { ResumeStore.reload() }
+        runCatching { SearchHistory.reload() }
+        runCatching { RecentMusic.reload() }
+    }
+
+    /** Deletes everything stored locally for one account (used when it is removed or signed out). */
+    private fun wipeLocalData(id: String?) {
+        if (id == null) return
+        val ctx = YTXTubeApplication.appContext
+        listOf("resume", "search_history_prefs", "recent_music").forEach { base ->
+            runCatching { ctx.deleteSharedPreferences("${base}_$id") }
+        }
+    }
+
     private data class StoredAccount(
         val id: String,
         val name: String,
@@ -200,6 +232,7 @@ object Account {
             profile = null
         }
         publish()
+        reloadScopedStores()
 
         if (entries.isNotEmpty()) {
             kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
@@ -289,6 +322,7 @@ object Account {
             }
             persistAccounts()
             publish()
+            reloadScopedStores()
         }
     }
 
@@ -428,6 +462,7 @@ object Account {
         profile = Profile(target.name, target.handle, target.avatar)
         persistAccounts()
         publish()
+        reloadScopedStores()
         StreamCache.invalidateAll()
         CaptionTracks.invalidateAll()
         runCatching {
@@ -450,6 +485,7 @@ object Account {
     fun signOut() {
         saveActive()
         val id = activeAccountId
+        wipeLocalData(id)
         entries.removeAll { it.id == id }
         synchronized(cookies) { cookies.clear() }
         if (entries.isNotEmpty()) {
@@ -469,9 +505,11 @@ object Account {
         }
         persistAccounts()
         publish()
+        reloadScopedStores()
         StreamCache.invalidateAll()
         CaptionTracks.invalidateAll()
         android.webkit.CookieManager.getInstance().apply { removeAllCookies(null); flush() }
+        runCatching { android.webkit.WebStorage.getInstance().deleteAllData() }
     }
 
     /** Removes a saved account without touching the active session. */
@@ -481,6 +519,7 @@ object Account {
             return
         }
         entries.removeAll { it.id == id }
+        wipeLocalData(id)
         persistAccounts()
         publish()
     }
@@ -724,7 +763,11 @@ object InnerTube {
         Net.client.newCall(request).execute().use { r ->
             if (auth != null) Account.absorbSetCookies(r.headers("Set-Cookie"))
             val text = r.body?.string().orEmpty()
-            if (r.code == 401 || r.code == 403) throw IOException("YouTube rejected the session (${r.code}). Try signing in again.")
+            if (r.code == 401 || r.code == 403) {
+                // 401 on an authenticated call means the cookies are no longer valid.
+                if (auth != null && r.code == 401) Account.markSessionRejected()
+                throw IOException("YouTube rejected the session (${r.code}). Try signing in again.")
+            }
             if (!r.isSuccessful) throw IOException("YouTube returned ${r.code}")
             return JSONObject(text)
         }

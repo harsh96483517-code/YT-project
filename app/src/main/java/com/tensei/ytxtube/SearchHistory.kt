@@ -20,8 +20,16 @@ object SearchHistory {
 
     fun init(context: Context) {
         if (prefs == null) {
-            prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs = context.applicationContext.getSharedPreferences(Account.scopedName(PREFS_NAME), Context.MODE_PRIVATE)
         }
+        load()
+    }
+
+    /** Called when the active account changes: show only that account's searches. */
+    fun reload() {
+        if (prefs == null) return
+        prefs = YTXTubeApplication.appContext.getSharedPreferences(Account.scopedName(PREFS_NAME), Context.MODE_PRIVATE)
+        queries = emptyList()
         load()
     }
 

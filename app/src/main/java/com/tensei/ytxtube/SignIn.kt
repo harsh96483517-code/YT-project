@@ -328,6 +328,15 @@ fun AccountSheet(onSignIn: () -> Unit, onSignedOut: () -> Unit, onDismiss: () ->
                 Spacer(Modifier.height(12.dp))
                 Text(profile.name, fontFamily = RoundedHeavy, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
                 profile.handle?.let { Text(it, color = c.onSurfaceVariant, fontSize = 14.sp) }
+                if (Account.sessionExpired) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Your session expired. Sign in again to keep this account working.",
+                        color = c.error, fontSize = 14.sp, lineHeight = 20.sp, textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    PillButton("Sign in again", { onDismiss(); onSignIn() })
+                }
                 Spacer(Modifier.height(20.dp))
                 PillButton("Sign out", { Account.signOut(); onSignedOut(); onDismiss() }, Icons.AutoMirrored.Rounded.Logout)
             }
